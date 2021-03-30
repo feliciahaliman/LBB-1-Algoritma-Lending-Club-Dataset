@@ -1,0 +1,180 @@
+---
+title: 'LBB 1 Algoritma: Lending Club Dataset'
+author: "Felicia Haliman"
+date: "30/3/2020"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+## Data Set Information:
+Lending Club connects people who need money (borrowers) with people who have money (investors). But in this case, we want to know more related purposes of the lenders.
+
+## First, we run the library
+```{r}
+library(glue)
+library(ggrepel)
+library(ggridges)
+library(ggthemes)
+library(leaflet)
+library(lubridate)
+library(scales)
+library(tidyverse)
+library(sf)
+library(rnaturalearth)
+library(padr)
+library(plotly)
+library(magick)
+```
+## Read File
+```{r}
+loan <- read.csv(file = "Clsssifier-which-classified-whether-a-borrower-paid-the-loan-in-full-Lending-Club.com-master/loan_data.csv")
+loan
+```
+
+`legend:`\
+- credit policy: 1 if the customer meets the credit underwriting criteria of LendingClub.com, and 0 otherwise\
+- purpose: The purpose of the loan (takes values "credit_card", "debt_consolidation", "educational", "major_purchase", "small_business", and "all_other")\
+- int.rate: The interest rate of the loan, as a proportion (a rate of 11% would be stored as 0.11). Borrowers judged by LendingClub.com to be more risky are assigned higher interest rates\
+- installment: The monthly installments owed by the borrower if the loan is funded.\
+- log.annual.inc : The natural log of the self-reported annual income of the borrower.\
+- dti : The debt-to-income ratio of the borrower (amount of debt divided by annual income).\
+- fico : The FICO credit score of the borrower.\
+- days.with.cr.line : The number of days the borrower has had a credit line.\
+- revor.bal : The borrower's revolving balance (amount unpaid at the end of the credit card billing cycle).\
+- revol.util : The borrower's revolving line utilization rate (the amount of the credit line used relative to total credit available).\
+- inq.last.6mths : The borrower's number of inquiries by creditors in the last 6 months.
+- delinq.2yrs : The number of times the borrower had been 30+ days past due on a payment in the past 2 years.\
+- pub.rec : The borrower's number of derogatory public records (bankruptcy filings, tax liens, or judgments)\
+- not.fully.paid: 0 unpaid, 1 paid
+
+## Check the data, `Clean` No N/A
+```{r}
+colSums(is.na(loan))
+```
+`Insight`: 1. The data is clean, no N/A
+
+## Data Structure
+```{r}
+str(loan)
+```
+`Insight`: 2. The data has the right category per each column
+
+### Data Visualization
+
+First, check the fico score of people with different credit policies.People with credit policy 1 meet the credit criteria whereas people with credit score 0 do not meet the criteria\
+```{r}
+ggplot(loan, aes(x=fico)) +
+  geom_histogram(data = loan[loan$credit.policy == 0, ], fill= "blue", alpha=0.8, position="identity", bins = 30)+
+  geom_histogram(data = loan[loan$credit.policy == 1, ], fill= "red", alpha=0.8, position="identity", bins = 30)
+```
+
+`Insight`: 3. Based on this visualization, most of the borrower meet the criteria
+
+## We check the data is normal or not through visualization `boxplot`
+```{r}
+boxplot(loan$fico)
+```
+
+`Insight`: 4. Based on this visualization, we got only 2 data has significancy unnormal or outliers, Median around 700.\
+
+## Researcher will aggregate not fully paid.
+
+```{r}
+data_nfp <- loan %>% 
+  group_by(loan$not.fully.paid) %>% 
+  summarise(n = n()) %>% 
+  ungroup()
+
+data_nfp
+```
+*not.fully.paid: 0 unpaid, 1 paid\
+
+## Create ggplot for `not fully paid`
+```{r}
+g <- ggplot(data_nfp, aes(x =`loan$not.fully.paid`, y = n)) +
+  geom_col(aes(fill = n)) +
+  geom_text(aes(y = n + max(n) * 0.05, label = n))+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  guides(fill = FALSE) +
+  labs(
+    title = "Approved and rejected from Lending Club",
+    subtitle = "Not Fully Paid",
+    caption = "Source: Felicia Haliman ~ Priyam1464(github)",
+    x = NULL,
+    y = NULL
+  )
+g
+```
+
+`Insight`: 5. From this we got insight, mostly borrower cant pay their loan, based on the data, we got 8,045 borrower unpaid and 1,533 paid.
+
+## Now we aggregate for `purpose`
+```{r}
+data_p <- loan %>% 
+  group_by(loan$purpose) %>% 
+  summarise(n = n()) %>% 
+  ungroup()
+
+data_p
+```
+
+## Create ggplot for `purpose`
+```{r}
+p <- ggplot(data_p, aes(x = `loan$purpose`, y = n)) +
+  geom_col(aes(fill = n)) +
+  geom_text(aes(y = n + max(n) * 0.05, label = n))+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  guides(fill = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Approved and rejected from Lending Club",
+    subtitle = "Purpose",
+    caption = "Source: Felicia Haliman ~ Priyam1464(github)",
+    x = NULL,
+    y = NULL
+  )
+p
+```
+
+`Insight`: 6. Most the lenders have purpose for debt_consolidation (Based on Economic Times, definition of debt consolidation means combining more than one debt obligation into a new loan with a favourable term structure such as lower interest rate structure,tenure,etc).
+
+## Visualize for Annual Income from `log.annual.inc`
+```{r}
+ggplot(loan, aes(x = log.annual.inc)) +
+  geom_bar(fill = "Red", colour = "black") +
+  geom_density(fill = "dark blue", alpha = 0.7, colour = FALSE) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0, 0)),
+    labels = dollar_format(suffix = "K")
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    title = "Approved and rejected from Lending Club",
+    subtitle = "Annual Income",
+    caption = "Source: Felicia Haliman ~ Priyam1464(github)",
+    x = NULL,
+    y = NULL
+  )
+```
+
+`Insight`: 7. 300 peoples have income `$10k - $12K`
+
+#### Conclusion:
+1. The data is clean, no N/A\
+2. The data has the right category per each column\
+3. Based on this visualization, most of the borrower meet the criteria\
+4. Based on this visualization, we got only 2 data has significancy unnormal, Median around 700.\
+5. From this we got insight, mostly borrower cant pay their loan, based on the data, we got 8,045 borrower unpaid and 1,533 paid.\
+6. Most the lenders have purpose for debt_consolidation (Based on Economic Times, definition of debt consolidation means combining more than one debt obligation into a new loan with a favourable term structure such as lower interest rate structure,tenure,etc).\
+7. 300 peoples have income `$10k - $12K`.\
+
+```{r}
+# This data show the how the underwriting works, most of this data meet the criteria, but most of them cant pay their loan, the purposes is to restructure the loan to get lower interest, get longer tenure.
+```
+
+
+`Source:`\
+Economic Times, 2021, "Definition of Debt Consolidation", link: https://economictimes.indiatimes.com/definition/debt-consolidation\
+Priyam1464,2017,"Clsssifier-which-classified-whether-a-borrower-paid-the-loan-in-full-Lending-Club.com",link:https://github.com/Priyam1464/Clsssifier-which-classified-whether-a-borrower-paid-the-loan-in-full-Lending-Club.com
